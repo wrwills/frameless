@@ -4,10 +4,11 @@ import org.apache.spark.sql.FramelessInternals
 import org.apache.spark.sql.catalyst.ScalaReflection
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.objects._
-import org.apache.spark.sql.catalyst.util.GenericArrayData
+import org.apache.spark.sql.catalyst.util.{GenericArrayData, MapData}
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 import shapeless._
+
 import scala.reflect.ClassTag
 
 abstract class TypedEncoder[T](implicit val classTag: ClassTag[T]) extends Serializable {
@@ -294,6 +295,50 @@ object TypedEncoder {
       }
     }
   }
+
+  implicit def mapEncoder[A,B](
+                                 implicit
+                                 underlying: TypedEncoder[A], underlyingb: TypedEncoder[B]
+                               ): TypedEncoder[Map[A,B]] = new TypedEncoder[Map[A,B]]() {
+    def nullable: Boolean = false
+
+    def sourceDataType: DataType = FramelessInternals.objectTypeFor[Map[A,B]](classTag)
+
+    def targetDataType: DataType = DataTypes.createArrayType(underlying.targetDataType)
+
+    def constructorFor(path: Expression): Expression = {
+      val arrayData = Invoke(
+        MapObjects(
+          underlying.constructorFor,
+          path,
+          underlying.targetDataType
+        ),
+        "map",
+        ScalaReflection.dataTypeFor[Map[Any,Any]]
+      )
+
+      StaticInvoke(
+        TypedEncoderUtils.getClass,
+        sourceDataType,
+        "mkMap",
+        arrayData :: Nil
+      )
+    }
+
+    def extractorFor(path: Expression): Expression = {
+      if (ScalaReflection.isNativeType(underlying.targetDataType)) {
+        NewInstance(
+          classOf[MapData],
+          path :: Nil,
+          dataType = MapType(underlying.targetDataType, underlyingb.targetDataType, underlyingb.nullable)
+        )
+      } else {
+        MapObjects(underlying.extractorFor, path, underlying.sourceDataType)
+      }
+    }
+  }
+
+
 
   /** Encodes things using injection if there is one defined */
   implicit def usingInjection[A: ClassTag, B]
