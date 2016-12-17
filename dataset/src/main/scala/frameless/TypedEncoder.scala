@@ -316,13 +316,13 @@ object TypedEncoder {
         "map",
         ScalaReflection.dataTypeFor[Map[Any,Any]]
       )
-
-      StaticInvoke(
+      arrayData
+      /*StaticInvoke(
         TypedEncoderUtils.getClass,
         sourceDataType,
         "mkMap",
         arrayData :: Nil
-      )
+      )*/
     }
 
     def extractorFor(path: Expression): Expression = {

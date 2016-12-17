@@ -41,10 +41,35 @@ class CollectTests extends TypedDatasetSuite {
     check(forAll(prop[Vector[Int]] _))
     check(forAll(prop[Option[Int]] _))
     check(forAll(prop[Vector[X2[Int, Int]]] _))
+    check(forAll(prop[Map[String,Int]] _))
   }
 }
 
 object CollectTests {
   def prop[A: TypedEncoder : ClassTag](data: Vector[A])(implicit c: SQLContext): Prop =
     TypedDataset.create(data).collect().run().toVector ?= data
+}
+case class Foo(a: String, B: Map[String,Int])
+
+class TestMap extends TypedDatasetSuite {
+  import TypedEncoder._
+  val testm = Seq(Foo("a",Map("aeu" -> 3)))
+  //val testm = Seq(Map("aeu" -> 3))
+  val test = Vector(1)
+  implicit val sQLContext_ = sqlContext
+  val t = TypedDataset.create( Seq(test) )
+  //import sc..implicits._
+  //import sQLContext_._
+  val spark = session
+  import spark.implicits._
+  val ds = sqlContext.createDataset(testm)
+  ds.show()
+  //+---+-------------+
+  //|  a|            B|
+  //+---+-------------+
+  //|  a|Map(aeu -> 3)|
+  //+---+-------------+
+
+  val tm = TypedDataset.create( testm )
+  tm.show()
 }
